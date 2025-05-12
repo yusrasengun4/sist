@@ -96,7 +96,7 @@ int main() {
                 printf("Dosya adı: ");
                 scanf("%s", dosya_adi);
                 getchar();
-                if (fs_exits(dosya_adi) == 1) {
+                if (fs_exists(dosya_adi) == 1) {
                     printf("Dosya VAR: %s\n", dosya_adi);
                 } else {
                     printf("Dosya YOK: %s\n", dosya_adi);
