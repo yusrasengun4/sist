@@ -590,6 +590,35 @@ int resolve_path(char *full_path) {
     return -1; // Bulunamadı
 }
 int fs_mv(char *old_path, char *new_path) {
+    if (check_disk() == -1) return -1;
+    if (strlen(new_path) >= MAX_FILENAME_LEN) {
+        printf("fs_mv: Hedef dosya adı çok uzun.\n");
+        return -1;
+    }
+
+    // Hedef zaten var mı?
+    if (resolve_path(new_path) != -1) {
+        printf("fs_mv: '%s' zaten mevcut.\n", new_path);
+        return -1;
+    }
+
+    // Kaynağı bul
+    int offset = resolve_path(old_path);
+    if (offset == -1) {
+        printf("fs_mv: '%s' bulunamadı.\n", old_path);
+        return -1;
+    }
+
+    // Yeni adı yaz
+    lseek(disk_fd, offset, SEEK_SET);
+    char newname_buf[MAX_FILENAME_LEN] = {0};
+    strncpy(newname_buf, new_path, MAX_FILENAME_LEN - 1);
+    write(disk_fd, newname_buf, MAX_FILENAME_LEN);
+
+    printf("fs_mv: '%s' -> '%s' olarak yeniden adlandırıldı.\n", old_path, new_path);
+    return 0;
+}
+int fs_mv(char *old_path, char *new_path) {
  if (check_disk() == -1) return -1;
 	  if (strlen(new_path) >= MAX_FILENAME_LEN) {
         printf("fs_mv: Hedef dosya adı çok uzun.\n");
