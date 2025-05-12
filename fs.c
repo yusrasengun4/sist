@@ -530,6 +530,65 @@ int fs_copy(char*source,char*dest){
     free(buffer);
     return -1;
 }
+typedef struct {
+    char name[MAX_FILENAME_LEN];
+    int is_directory;          // 1 ise dizin, 0 ise dosya
+    int metadata_offset;       // Dosyanın metadata'daki yeri
+} DirectoryEntry;
+int fs_mkdir(char *path) {
+    if (check_disk() == -1) return -1;
+
+    // Dizin zaten var mı kontrol et
+    if (resolve_path(path) != -1) {
+        printf("fs_mkdir: Dizin zaten mevcut: %s\n", path);
+        return -1;
+    }
+
+    // Uygun boş metadata yeri bul
+    lseek(disk_fd, 0, SEEK_SET);
+    char name_buf[MAX_FILENAME_LEN];
+    int filesize, fileoffset;
+
+    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+        off_t offset = lseek(disk_fd, 0, SEEK_CUR);
+        read(disk_fd, name_buf, MAX_FILENAME_LEN);
+        read(disk_fd, &filesize, sizeof(int));
+        read(disk_fd, &fileoffset, sizeof(int));
+
+        if (name_buf[0] == '\0') {
+            // Boş kayıt bulduk, dizin olarak yaz
+            lseek(disk_fd, offset, SEEK_SET);
+            write(disk_fd, path, MAX_FILENAME_LEN);
+            int size = 0;
+            int is_dir_offset = METADATA_SIZE + (i * 4096); // örnek ofset
+            write(disk_fd, &size, sizeof(int));
+            write(disk_fd, &is_dir_offset, sizeof(int));
+            printf("fs_mkdir: Dizin oluşturuldu: %s\n", path);
+            return 0;
+        }
+    }
+
+    printf("fs_mkdir: Yer yok.\n");
+    return -1;
+}
+int resolve_path(char *full_path) {
+    lseek(disk_fd, 0, SEEK_SET);
+    char name_buf[MAX_FILENAME_LEN];
+    int filesize, fileoffset;
+
+    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+        off_t offset = lseek(disk_fd, 0, SEEK_CUR);
+        read(disk_fd, name_buf, MAX_FILENAME_LEN);
+        read(disk_fd, &filesize, sizeof(int));
+        read(disk_fd, &fileoffset, sizeof(int));
+
+        if (strncmp(name_buf, full_path, MAX_FILENAME_LEN) == 0) {
+            return offset; // Metadata ofsetini döndür
+        }
+    }
+
+    return -1; // Bulunamadı
+}
 int fs_mv(char *old_path, char *new_path) {
  if (check_disk() == -1) return -1;
 	  if (strlen(new_path) >= MAX_FILENAME_LEN) {
