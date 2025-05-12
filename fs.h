@@ -32,6 +32,6 @@ int fs_cat(const char* filename);
 int fs_restore(const char *backup_path);
 int fs_diff(const char* file1,const char* file2);
 void fs_log(const char *operation, const char *filename, const char *result);
-
-
+int resolve_path(char *full_path);
+int fs_mkdir(char *path)
 #endif
