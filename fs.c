@@ -844,7 +844,7 @@ int fs_restore(const char *backup_path) {
 
     // Yedeği orijinal disk dosyasına geri yaz
     FILE *backup_file = fopen(backup_path, "rb");
-    FILE *disk_file = fopen("disk.img", "wb");
+    FILE *disk_file = fopen("disk.sim", "wb");
 
     if (!backup_file || !disk_file) {
         perror("fs_restore: Dosya açma hatası");
@@ -864,9 +864,9 @@ int fs_restore(const char *backup_path) {
     fclose(disk_file);
 
     // Yeniden aç
-    disk_fd = open("disk.img", O_RDWR);
+    disk_fd = open("disk.sim", O_RDWR);
     if (disk_fd == -1) {
-        perror("fs_restore: disk.img yeniden açılamadı");
+        perror("fs_restore: disk.sim yeniden açılamadı");
         return -1;
     }
 
@@ -874,7 +874,7 @@ int fs_restore(const char *backup_path) {
     return 0;
 }
 int fs_diff(const char *file1, const char *file2) {
-    if (check_disk() == -1) return -1;
+      if (check_disk() == -1) return -1;
 
     lseek(disk_fd, 0, SEEK_SET);
 
@@ -883,7 +883,7 @@ int fs_diff(const char *file1, const char *file2) {
     int filesize2 = -1, offset2 = -1;
 
     // 1. ve 2. dosyaların metadata'sını bul
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+    for (int i = 0; i < MAX_FILE_COUNT; i++) {
         read(disk_fd, name_buf, MAX_FILENAME_LEN);
         int filesize, offset;
         read(disk_fd, &filesize, sizeof(int));
@@ -909,16 +909,32 @@ int fs_diff(const char *file1, const char *file2) {
         return 1;
     }
 
-    // İçerikleri karşılaştır
+    // Bellek ayırma
     char *buf1 = malloc(filesize1);
     char *buf2 = malloc(filesize2);
 
+    if (!buf1 || !buf2) {
+        printf("fs_diff: Bellek ayrımı başarısız.\n");
+        free(buf1); free(buf2);
+        return -1;
+    }
+
+    // Dosya içeriklerini okuma
     lseek(disk_fd, offset1, SEEK_SET);
-    read(disk_fd, buf1, filesize1);
+    if (read(disk_fd, buf1, filesize1) != filesize1) {
+        printf("fs_diff: %s dosyası okunamadı.\n", file1);
+        free(buf1); free(buf2);
+        return -1;
+    }
 
     lseek(disk_fd, offset2, SEEK_SET);
-    read(disk_fd, buf2, filesize2);
+    if (read(disk_fd, buf2, filesize2) != filesize2) {
+        printf("fs_diff: %s dosyası okunamadı.\n", file2);
+        free(buf1); free(buf2);
+        return -1;
+    }
 
+    // Karşılaştırma
     int result = memcmp(buf1, buf2, filesize1);
     free(buf1);
     free(buf2);
