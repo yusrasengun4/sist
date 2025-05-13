@@ -14,7 +14,7 @@
 #define METADATA_SIZE 4096
 #define RECORD_SIZE  264
 #define MAX_FILENAME_LEN 256
-
+#define MAX_FILE_COUNT (METADATA_SIZE / RECORD_SIZE)
 int disk_fd = -1;
 
 
@@ -682,6 +682,11 @@ int fs_defragment(){
             char *buffer = malloc(filesize);
             lseek(disk_fd, fileoffset, SEEK_SET);
             read(disk_fd, buffer, filesize);
+           if (read(disk_fd, buffer, filesize) != filesize) {
+             perror("fs_defragment: Dosya okunamadı");
+               free(buffer);
+             return -1;
+             }
 
             // Yeni konuma yaz
             lseek(disk_fd, new_offset, SEEK_SET);
@@ -700,13 +705,16 @@ int fs_defragment(){
     printf("fs_defragment: Tüm dosyalar yeniden hizalandı.\n");
     return 0;
 }
-int fs_check_integrity(){
-	if (check_disk() == -1) return -1;
-	 lseek(disk_fd, 0, SEEK_SET);
+int fs_check_integrity() {
+    if (check_disk() == -1) return -1;
+
+    lseek(disk_fd, 0, SEEK_SET);
+
     char name_buf[MAX_FILENAME_LEN];
     int filesize, fileoffset;
     int is_valid = 1;
 
+    // Disk boyutunu al
     struct stat st;
     if (fstat(disk_fd, &st) == -1) {
         perror("fs_check_integrity: Disk boyutu alınamadı");
@@ -715,20 +723,42 @@ int fs_check_integrity(){
 
     off_t disk_size = st.st_size;
 
+    // Dosya başlangıç ve bitiş adreslerini ayrı dizilerde tut
+    int starts[MAX_FILE_COUNT];
+    int ends[MAX_FILE_COUNT];
+    char names[MAX_FILE_COUNT][MAX_FILENAME_LEN];
+    int file_count = 0;
+
     printf("Dosya sistemi bütünlük kontrolü:\n");
 
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+    for (int i = 0; i < MAX_FILE_COUNT; i++) {
         read(disk_fd, name_buf, MAX_FILENAME_LEN);
         read(disk_fd, &filesize, sizeof(int));
         read(disk_fd, &fileoffset, sizeof(int));
 
         if (name_buf[0] != '\0') {
-            if (fileoffset + filesize > disk_size) {
-                printf("HATA: %s dosyasının boyutu veya konumu hatalı.\n", name_buf);
+            int start = fileoffset;
+            int end = fileoffset + filesize;
+
+            // Disk boyutunu aşma kontrolü
+            if (end > disk_size) {
+                printf("HATA: %s dosyasının konumu disk boyutunu aşıyor.\n", name_buf);
                 is_valid = 0;
             }
 
-            // Diğer dosyalarla çakışma kontrolü istenirse buraya eklenebilir.
+            // Diğer dosyalarla çakışma kontrolü
+            for (int j = 0; j < file_count; j++) {
+                if (!(end <= starts[j] || start >= ends[j])) {
+                    printf("HATA: %s dosyası %s ile çakışıyor.\n", name_buf, names[j]);
+                    is_valid = 0;
+                }
+            }
+
+            // Geçerli dosyayı diziye ekle
+            starts[file_count] = start;
+            ends[file_count] = end;
+            strncpy(names[file_count], name_buf, MAX_FILENAME_LEN);
+            file_count++;
         }
     }
 
