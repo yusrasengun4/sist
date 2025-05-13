@@ -20,21 +20,21 @@ int main() {
         printf("\n=== Dosya Sistemi İşlemleri ===\n");
         printf("1. Dosya Oluştur\n");
         printf("2. Dosya Sil\n");
-        printf("3. Dosyaya Veri Yaz\n");
-        printf("4. Veri Oku\n");
-        printf("5. Dosyaları Listele\n");
-        printf("6. Format At\n");
-        printf("7. Dosyayı Yeniden Adlandır\n");
-        printf("8. Dosya Var mı?\n");
-        printf("9. Dosya Boyutu\n");
-        printf("10. Dosyanın Sonuna Veri Ekle\n");
-        printf("11. Dosyayı Küçült\n");
-        printf("12. Dosyayı Kopyala\n");
-        printf("13. Dosyayı Taşı\n");
-        printf("14. Boş Alanları Birleştir (Defragment)\n");
-        printf("15. Bütünlüğü Kontrol Et\n");
-        printf("16. Diski Yedekle\n");
-        printf("17. Dosya İçeriğini Yazdır\n");
+        printf("3. Dosyaya yaz\n");
+        printf("4. Dosyadan oku\n");
+        printf("5. Dosyaları listele\n");
+        printf("6. Format at\n");
+        printf("7. Dosyayı yeniden adlandır\n");
+        printf("8. Dosyayı bul\n");
+        printf("9. Dosya boyutu\n");
+        printf("10. Dosyanın sonuna veri ekle\n");
+        printf("11. Dosyayı küçült\n");
+        printf("12. Dosyayı kopyala\n");
+        printf("13. Dosyayı taşı\n");
+        printf("14. Boş alanları birleştir (defragment)\n");
+        printf("15. Bütünlüğü kontrol et\n");
+        printf("16. Diski yedekle\n");
+        printf("17. Dosya içeriğini yazdır\n");
         printf("18. Yedekten Geri Yükle\n");
         printf("19. İki Dosyayı Karşılaştır\n");
         printf("0. Çıkış\n");
@@ -149,9 +149,14 @@ int main() {
                 scanf("%s", dosya_adi);
                 printf("Yeni dosya adı: ");
                 scanf("%s", dosya_adi2);
-                getchar();
-                fs_mv(dosya_adi, dosya_adi2);
-                break;
+                getchar(); // stdin temizliği (iyi)
+
+               if (fs_mv(dosya_adi, dosya_adi2) == 0) {
+               printf("Dosya başarıyla yeniden adlandırıldı.\n");
+             } else {
+           printf("Dosya yeniden adlandırılamadı.\n");
+           }
+            break;
 
             case 14:
                 if (fs_defragment() == 0) {
