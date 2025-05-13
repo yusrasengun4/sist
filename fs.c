@@ -15,7 +15,7 @@
 #define RECORD_SIZE  264
 #define MAX_FILENAME_LEN 256
 #define MAX_FILE_COUNT (METADATA_SIZE / RECORD_SIZE)
-int disk_fd = -1;
+
 
 
 
@@ -36,10 +36,8 @@ int fs_init() {
     struct stat st;
     if (fstat(disk_fd, &st) == 0) {
         if (st.st_size == 0) {
-            // Dosya boyutu sıfırsa (yeni dosya veya formatlanmamış)
-            // Disk alanını ayarla (örneğin 1MB disk simülasyonu oluşturuluyor)
-            char zero = 0; // Diskin başını '0' byte ile doldurmak için
-            for (int i = 0; i < 1024 * 1024; i++) { // 1MB'lık boş alan oluştur
+             char zero = 0; // Diskin başını '0' byte ile doldurmak için
+            for (int i = 0; i < 1024 * 1024; i++) { 
                 write(disk_fd, &zero, sizeof(zero));
             }
             printf("Yeni disk.sim dosyası oluşturuldu (1MB).\n");
@@ -54,7 +52,13 @@ int fs_init() {
 
     return 0;
 }
-
+int check_disk(){
+  if(disk_fd==-1){
+   fprintf(stderr,"check_disk başlatılmamış.\n");
+   return -1;
+  }
+	return 0;
+}
 void fs_close() {
     if (disk_fd != -1) {
         close(disk_fd);
@@ -71,12 +75,7 @@ int check_filename(const char* filename) {
 }
 
 
-void fs_close() {
-    if (disk_fd != -1) {
-        close(disk_fd);
-        disk_fd = -1;
-    }
-}
+
 
 int fs_create(char *filename) {
      if (check_disk() == -1) return -1;
@@ -126,68 +125,6 @@ int fs_create(char *filename) {
 	fs_log("CREATE", filename, "FAILED: Yer kalmadi");
     return -1;
 }
-int fs_write(char *filename, char *data) {
-   if (check_disk() == -1) return -1;
-    if (check_filename(filename) == -1) return -1;
-
-    lseek(disk_fd, 0, SEEK_SET);
-
-    char name_buf[MAX_FILENAME_LEN];
-    int filesize;
-    int fileoffset;
-
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
-        read(disk_fd, name_buf, MAX_FILENAME_LEN);
-        read(disk_fd, &filesize, sizeof(int));
-        read(disk_fd, &fileoffset, sizeof(int));
-
-        if (strncmp(name_buf, filename, MAX_FILENAME_LEN) == 0) {
-            int datalen = strlen(data);
-
-            lseek(disk_fd, fileoffset, SEEK_SET);
-            write(disk_fd, data, datalen);
-
-            // Metadata güncellemesi
-            lseek(disk_fd, 0 - (sizeof(int) + sizeof(int)), SEEK_CUR);
-            write(disk_fd, &datalen, sizeof(int));
-            lseek(disk_fd, sizeof(int), SEEK_CUR);
-
-            printf("fs_write: %s dosyasına %d byte yazıldı\n", filename, datalen);
-            return 0;
-        }
-		printf("fs_write: Dosya bulunamadı: %s\n", filename);
-    return -1;
-}
-}
-int fs_read(char *filename) {
-    if (check_disk() == -1) return -1;
-    if (check_filename(filename) == -1) return -1;
-
-    lseek(disk_fd, 0, SEEK_SET);
-
-    char name_buf[MAX_FILENAME_LEN];
-    int filesize;
-    int fileoffset;
-    char buffer[4096];
-
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
-        read(disk_fd, name_buf, MAX_FILENAME_LEN);
-        read(disk_fd, &filesize, sizeof(int));
-        read(disk_fd, &fileoffset, sizeof(int));
-
-        if (strncmp(name_buf, filename, MAX_FILENAME_LEN) == 0) {
-            lseek(disk_fd, fileoffset, SEEK_SET);
-            read(disk_fd, buffer, filesize);
-            buffer[filesize] = '\0';
-            printf("Dosya (%s) içeriği:\n%s\n", filename, buffer);
-            return 0;
-        }
-    }
-
-    printf("fs_read: Dosya bulunamadı: %s\n", filename);
-    return -1;
-}
-
 int fs_delete(char *filename) {
    if (check_disk() == -1) return -1;
     if (check_filename(filename) == -1) return -1;
@@ -219,6 +156,95 @@ int fs_delete(char *filename) {
     printf("fs_delete: Dosya bulunamadı: %s\n", filename);
     return -1;
 }
+int fs_write(char *filename, char *data) {
+   if (check_disk() == -1) return -1;
+    if (check_filename(filename) == -1) return -1;
+
+    lseek(disk_fd, 0, SEEK_SET);
+
+    char name_buf[MAX_FILENAME_LEN];
+    int filesize;
+    int fileoffset;
+
+    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+        read(disk_fd, name_buf, MAX_FILENAME_LEN);
+        read(disk_fd, &filesize, sizeof(int));
+        read(disk_fd, &fileoffset, sizeof(int));
+
+        if (strncmp(name_buf, filename, MAX_FILENAME_LEN) == 0) {
+            int datalen = strlen(data);
+
+            lseek(disk_fd, fileoffset, SEEK_SET);
+            write(disk_fd, data, datalen);
+
+            // Metadata güncellemesi
+	    off_t meta_filesize_offset=i*RECORD_SIZE+MAX_FILENAME_LEN;
+            lseek(disk_fd,meta_filesize_offset, SEEK_SET);
+            write(disk_fd, &datalen, sizeof(int));
+          
+
+            printf("fs_write: %s dosyasına %d byte yazıldı\n", filename, datalen);
+            return 0;
+        }
+		
+   
+}
+	printf("fs_write: Dosya bulunamadı: %s\n", filename);
+	fs_log("WRITE", filename, "FAILED: Dosya Bulunamadı");
+	 return -1;
+}
+
+int fs_read(char *filename) {
+    if (check_disk() == -1) return -1;
+    if (check_filename(filename) == -1) return -1;
+
+    lseek(disk_fd, 0, SEEK_SET);
+
+    char name_buf[MAX_FILENAME_LEN];
+    int filesize;
+    int fileoffset;
+    char buffer[4096];
+
+    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+        read(disk_fd, name_buf, MAX_FILENAME_LEN);
+        read(disk_fd, &filesize, sizeof(int));
+        read(disk_fd, &fileoffset, sizeof(int));
+
+        if (strncmp(name_buf, filename, MAX_FILENAME_LEN) == 0) {
+            if (filesize > sizeof(buffer) - 1) {
+                fprintf(stderr, "fs_read: Dosya çok büyük\n");
+                fs_log("READ", filename, "FAILED: Dosya cok buyuk");
+                return -1;
+            }
+
+            lseek(disk_fd, fileoffset, SEEK_SET);
+            read(disk_fd, buffer, filesize);
+            buffer[filesize] = '\0';
+            printf("Dosya (%s) içeriği:\n%s\n", filename, buffer);
+            fs_log("READ", filename, "SUCCESS");
+            return 0;
+        }
+    }
+
+    printf("fs_read: Dosya bulunamadı: %s\n", filename);
+    fs_log("READ", filename, "FAILED: Dosya bulunamadi");
+    return -1;
+}
+
+void fs_log(const char *operation, const char *filename, const char *result) {
+    FILE *log_file = fopen("fs_log.txt", "a");
+    if (!log_file) {
+        perror("fs_log: Log dosyası açılamadı");
+        return;
+    }
+
+    time_t now = time(NULL);
+    char *timestamp = ctime(&now);
+    timestamp[strcspn(timestamp, "\n")] = 0; // new line kaldır
+
+    fprintf(log_file, "[%s] %s - %s: %s\n", timestamp, operation, filename, result);
+    fclose(log_file);
+}
 int fs_ls(){
 	if (check_disk() == -1) return -1;
     
@@ -232,7 +258,7 @@ int fs_ls(){
 	
 	printf("\n ---Dosya Listesi--- \n");
 	
-	for (int i=0; i<METADATA_SIZE/RECORD_SIZE; İ++){
+	for (int i=0; i<METADATA_SIZE/RECORD_SIZE; i++){
 		read(disk_fd,name_buf,MAX_FILENAME_LEN);
 		read(disk_fd,&filesize,sizeof(int));
 		read(disk_fd,&fileoffset,sizeof(int));
@@ -254,7 +280,7 @@ int fs_format(){
         return -1;
     }
 
-    // Dosya boyutunu öğrenelim
+    // Dosya boyutunu öğrenelir
     struct stat st;
     if (fstat(disk_fd, &st) == -1) {
         perror("fs_format: fstat hatası");
@@ -262,7 +288,7 @@ int fs_format(){
     }
     off_t disk_size = st.st_size;
 
-    // Baştan sona tüm disk alanını sıfırlayacağız
+    // Baştan sona tüm disk alanını sıfırlanır
     lseek(disk_fd, 0, SEEK_SET);
 
     char zero_buf[4096];
@@ -281,7 +307,7 @@ int fs_format(){
     printf("fs_format: Disk tamamen sıfırlandı. (Metadata + Veri blokları)\n");
     return 0;
 }
-	int fs_rename(const char* oldname,const char*newname){
+int fs_rename(const char* oldname,const char*newname){
       if(disk_fd== -1){
        perror("fs_name:Disk bağlı değil");
       return -1;
@@ -304,9 +330,9 @@ char name_buf[MAX_FILENAME_LEN];
             // Eşleşme bulundu
             lseek(disk_fd, -RECORD_SIZE, SEEK_CUR);
 
-            // Yeni ismi yaz
+            // Yeni ismi yazılır
             char temp_buf[MAX_FILENAME_LEN];
-            memset(temp_buf, 0, MAX_FILENAME_LEN); // Eski isim tam silinsin diye
+            memset(temp_buf, 0, MAX_FILENAME_LEN); 
             strncpy(temp_buf, newname, MAX_FILENAME_LEN - 1);
             write(disk_fd, temp_buf, MAX_FILENAME_LEN);
 
@@ -368,8 +394,8 @@ int fs_size(char*filename){
     printf("fs_size: Dosya bulunamadı: %s\n", filename);
     return -1;
 }
-int fs_append(char *filename,char *data,int size){
-	if (check_disk() == -1) return -1;
+int fs_append(char *filename, char *data, int size) {
+    if (check_disk() == -1) return -1;
     if (check_filename(filename) == -1) return -1;
 
     lseek(disk_fd, 0, SEEK_SET);
@@ -379,23 +405,22 @@ int fs_append(char *filename,char *data,int size){
     int fileoffset;
 
     for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+        int metadata_offset = i * RECORD_SIZE;
+        lseek(disk_fd, metadata_offset, SEEK_SET);
+
         read(disk_fd, name_buf, MAX_FILENAME_LEN);
         read(disk_fd, &filesize, sizeof(int));
         read(disk_fd, &fileoffset, sizeof(int));
 
         if (strncmp(name_buf, filename, MAX_FILENAME_LEN) == 0) {
-            // Dosya bulundu
-
-            // Eski verinin sonuna eklemek için konumla
+            // Dosya bulunur
+	  //Eski verilerin sonuna eklemek için konumlanır
             lseek(disk_fd, fileoffset + filesize, SEEK_SET);
+            write(disk_fd, data, size); 
 
-            // Veriyi yaz
-            write(disk_fd, data, size);
-
-            // Metadata'daki boyutu güncelle
+            // Metadaki boyut güncellenir
             filesize += size;
-            lseek(disk_fd, - (size + sizeof(int)), SEEK_CUR); // Geri gelip sadece boyutu güncelle
-            lseek(disk_fd, MAX_FILENAME_LEN, SEEK_CUR); // İsim alanını atla
+            lseek(disk_fd, metadata_offset + MAX_FILENAME_LEN, SEEK_SET);
             write(disk_fd, &filesize, sizeof(int));
 
             printf("fs_append: %s dosyasına %d byte eklendi\n", filename, size);
@@ -406,20 +431,25 @@ int fs_append(char *filename,char *data,int size){
     printf("fs_append: Dosya bulunamadı: %s\n", filename);
     return -1;
 }
-int fs_truncate(char *filename,int newsize){
-	if (check_disk() == -1) return -1;
+
+int fs_truncate(char *filename, int newsize) {
+    if (check_disk() == -1) return -1;
     if (check_filename(filename) == -1) return -1;
-	 if (newsize < 0) {
+    if (newsize < 0) {
         printf("fs_truncate: Negatif boyut geçersiz.\n");
         return -1;
     }
 
     lseek(disk_fd, 0, SEEK_SET);
+
     char name_buf[MAX_FILENAME_LEN];
     int filesize;
     int fileoffset;
 
     for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+        int metadata_offset = i * RECORD_SIZE;
+        lseek(disk_fd, metadata_offset, SEEK_SET);
+
         read(disk_fd, name_buf, MAX_FILENAME_LEN);
         read(disk_fd, &filesize, sizeof(int));
         read(disk_fd, &fileoffset, sizeof(int));
@@ -430,16 +460,16 @@ int fs_truncate(char *filename,int newsize){
                 return -1;
             }
 
-            // Dosya içeriğini güncelle (gerekirse sıfırla)
+            // Gereksiz kısım sıfırlanır
             char zero = 0;
             lseek(disk_fd, fileoffset + newsize, SEEK_SET);
             for (int i = newsize; i < filesize; i++) {
                 write(disk_fd, &zero, 1);
             }
 
-            // Metadata'yı güncelle
-            lseek(disk_fd, -RECORD_SIZE + MAX_FILENAME_LEN, SEEK_CUR); // geri dön
-            write(disk_fd, &newsize, sizeof(int)); // yeni boyut
+            // Metadata’yı güncelle
+            lseek(disk_fd, metadata_offset + MAX_FILENAME_LEN, SEEK_SET);
+            write(disk_fd, &newsize, sizeof(int));
 
             printf("fs_truncate: Dosya '%s' %d byte'a kısaltıldı.\n", filename, newsize);
             return 0;
@@ -449,32 +479,32 @@ int fs_truncate(char *filename,int newsize){
     printf("fs_truncate: Dosya bulunamadı: %s\n", filename);
     return -1;
 }
-int fs_copy(char*source,char*dest){
-	if (check_disk() == -1) return -1;
-	  if (strlen(dest) >= MAX_FILENAME_LEN) {
+
+int fs_copy(char *source, char *dest) {
+    if (check_disk() == -1) return -1;
+    if (strlen(dest) >= MAX_FILENAME_LEN) {
         printf("fs_copy: Hedef dosya adı çok uzun.\n");
         return -1;
     }
 
-    lseek(disk_fd, 0, SEEK_SET);
     char name_buf[MAX_FILENAME_LEN];
-    int filesize;
-    int fileoffset;
-
-    // 1. Kaynak dosyayı bul
+    int filesize, fileoffset;
+    int source_size = 0, source_offset = 0;
     int found = 0;
-    int source_size = 0;
-    int source_offset = 0;
 
+ 
     for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+        int metadata_offset = i * RECORD_SIZE;
+        lseek(disk_fd, metadata_offset, SEEK_SET);
+
         read(disk_fd, name_buf, MAX_FILENAME_LEN);
         read(disk_fd, &filesize, sizeof(int));
         read(disk_fd, &fileoffset, sizeof(int));
 
         if (strcmp(name_buf, source) == 0) {
-            found = 1;
             source_size = filesize;
             source_offset = fileoffset;
+            found = 1;
             break;
         }
     }
@@ -484,67 +514,86 @@ int fs_copy(char*source,char*dest){
         return -1;
     }
 
-    // 2. Kaynak veriyi oku
+ 
     char *buffer = malloc(source_size);
+    if (!buffer) {
+        printf("fs_copy: Bellek hatası.\n");
+        return -1;
+    }
     lseek(disk_fd, source_offset, SEEK_SET);
     read(disk_fd, buffer, source_size);
 
-    // 3. Hedef dosya var mı kontrol et
-    lseek(disk_fd, 0, SEEK_SET);
+    
+    found = 0;
     for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+        int metadata_offset = i * RECORD_SIZE;
+        lseek(disk_fd, metadata_offset, SEEK_SET);
         read(disk_fd, name_buf, MAX_FILENAME_LEN);
         read(disk_fd, &filesize, sizeof(int));
         read(disk_fd, &fileoffset, sizeof(int));
 
-        if (strcmp(name_buf, dest) == 0) {
-            printf("fs_copy: Hedef dosya zaten var: %s\n", dest);
+        if (strncmp(name_buf, dest, MAX_FILENAME_LEN) == 0) {
+            // İçeriği üzerine yaz
+            lseek(disk_fd, fileoffset, SEEK_SET);
+            write(disk_fd, buffer, source_size);
+
+            // Dosya boyutunu güncelle
+            lseek(disk_fd, metadata_offset + MAX_FILENAME_LEN, SEEK_SET);
+            write(disk_fd, &source_size, sizeof(int));
+
+            printf("fs_copy: Var olan dosya '%s' üzerine yazıldı (%d byte)\n", dest, source_size);
             free(buffer);
-            return -1;
+            return 0;
         }
     }
 
-    // 4. Boş kayıt bul ve yeni dosyayı yaz
-    lseek(disk_fd, 0, SEEK_SET);
+   
     for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+        int metadata_offset = i * RECORD_SIZE;
+        lseek(disk_fd, metadata_offset, SEEK_SET);
         read(disk_fd, name_buf, MAX_FILENAME_LEN);
-        read(disk_fd, &filesize, sizeof(int));
-        read(disk_fd, &fileoffset, sizeof(int));
 
         if (name_buf[0] == '\0') {
-            lseek(disk_fd, -RECORD_SIZE, SEEK_CUR);
-            write(disk_fd, dest, MAX_FILENAME_LEN);
-            int new_offset = METADATA_SIZE + (i * 4096);
+            int new_offset = METADATA_SIZE + (i * 4096); // her dosya için ayrı bölge
+
+            // Metadata yaz
+            lseek(disk_fd, metadata_offset, SEEK_SET);
+            char dest_name[MAX_FILENAME_LEN] = {0};
+            strncpy(dest_name, dest, MAX_FILENAME_LEN - 1);
+            write(disk_fd, dest_name, MAX_FILENAME_LEN);
             write(disk_fd, &source_size, sizeof(int));
             write(disk_fd, &new_offset, sizeof(int));
 
             // İçeriği yaz
             lseek(disk_fd, new_offset, SEEK_SET);
             write(disk_fd, buffer, source_size);
+
             printf("fs_copy: %s -> %s kopyalandı (%d byte)\n", source, dest, source_size);
             free(buffer);
             return 0;
         }
     }
 
-    printf("fs_copy: Yeni dosya için yer kalmadı\n");
+    printf("fs_copy: Yeni dosya için yer kalmadı.\n");
     free(buffer);
     return -1;
 }
+
 typedef struct {
     char name[MAX_FILENAME_LEN];
-    int is_directory;          // 1 ise dizin, 0 ise dosya
-    int metadata_offset;       // Dosyanın metadata'daki yeri
+    int is_directory;          
+    int metadata_offset;       
 } DirectoryEntry;
 int fs_mkdir(char *path) {
     if (check_disk() == -1) return -1;
 
-    // Dizin zaten var mı kontrol et
+    
     if (resolve_path(path) != -1) {
         printf("fs_mkdir: Dizin zaten mevcut: %s\n", path);
         return -1;
     }
 
-    // Uygun boş metadata yeri bul
+    
     lseek(disk_fd, 0, SEEK_SET);
     char name_buf[MAX_FILENAME_LEN];
     int filesize, fileoffset;
@@ -560,7 +609,7 @@ int fs_mkdir(char *path) {
             lseek(disk_fd, offset, SEEK_SET);
             write(disk_fd, path, MAX_FILENAME_LEN);
             int size = 0;
-            int is_dir_offset = METADATA_SIZE + (i * 4096); // örnek ofset
+            int is_dir_offset = METADATA_SIZE + (i * 4096);
             write(disk_fd, &size, sizeof(int));
             write(disk_fd, &is_dir_offset, sizeof(int));
             printf("fs_mkdir: Dizin oluşturuldu: %s\n", path);
@@ -583,11 +632,11 @@ int resolve_path(char *full_path) {
         read(disk_fd, &fileoffset, sizeof(int));
 
         if (strncmp(name_buf, full_path, MAX_FILENAME_LEN) == 0) {
-            return offset; // Metadata ofsetini döndür
+            return offset; 
         }
     }
 
-    return -1; // Bulunamadı
+    return -1; 
 }
 int fs_mv(char *old_path, char *new_path) {
     if (check_disk() == -1) return -1;
@@ -596,20 +645,20 @@ int fs_mv(char *old_path, char *new_path) {
         return -1;
     }
 
-    // Hedef zaten var mı?
+   
     if (resolve_path(new_path) != -1) {
         printf("fs_mv: '%s' zaten mevcut.\n", new_path);
         return -1;
     }
 
-    // Kaynağı bul
+    
     int offset = resolve_path(old_path);
     if (offset == -1) {
         printf("fs_mv: '%s' bulunamadı.\n", old_path);
         return -1;
     }
 
-    // Yeni adı yaz
+    
     lseek(disk_fd, offset, SEEK_SET);
     char newname_buf[MAX_FILENAME_LEN] = {0};
     strncpy(newname_buf, new_path, MAX_FILENAME_LEN - 1);
@@ -618,49 +667,7 @@ int fs_mv(char *old_path, char *new_path) {
     printf("fs_mv: '%s' -> '%s' olarak yeniden adlandırıldı.\n", old_path, new_path);
     return 0;
 }
-int fs_mv(char *old_path, char *new_path) {
- if (check_disk() == -1) return -1;
-	  if (strlen(new_path) >= MAX_FILENAME_LEN) {
-        printf("fs_mv: Hedef dosya adı çok uzun.\n");
-        return -1;
-    }
-	lseek(disk_fd, 0, SEEK_SET);
-    char name_buf[MAX_FILENAME_LEN];
-    int filesize;
-    int fileoffset;
 
-    // Önce yeni ad zaten kullanılıyor mu?
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
-        read(disk_fd, name_buf, MAX_FILENAME_LEN);
-        read(disk_fd, &filesize, sizeof(int));
-        read(disk_fd, &fileoffset, sizeof(int));
-        if (strncmp(name_buf, new_path, MAX_FILENAME_LEN) == 0) {
-            printf("fs_mv: '%s' zaten mevcut.\n", new_path);
-            return -1;
-        }
-    }
-
-    // Eski adı bul ve değiştir
-    lseek(disk_fd, 0, SEEK_SET);
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
-        off_t pos = lseek(disk_fd, 0, SEEK_CUR);
-        read(disk_fd, name_buf, MAX_FILENAME_LEN);
-        read(disk_fd, &filesize, sizeof(int));
-        read(disk_fd, &fileoffset, sizeof(int));
-
-        if (strncmp(name_buf, old_path, MAX_FILENAME_LEN) == 0) {
-            lseek(disk_fd, pos, SEEK_SET);
-            char newname_buf[MAX_FILENAME_LEN] = {0};
-            strncpy(newname_buf, new_path, MAX_FILENAME_LEN - 1);
-            write(disk_fd, newname_buf, MAX_FILENAME_LEN);
-            printf("fs_mv: '%s' dosyası '%s' olarak yeniden adlandırıldı.\n", old_path, new_path);
-            return 0;
-        }
-    }
-
-    printf("fs_mv: '%s' adlı dosya bulunamadı.\n", old_path);
-    return -1;
-}
 int fs_defragment(){
  if (check_disk() == -1) return -1;
  lseek(disk_fd, 0, SEEK_SET);
@@ -668,7 +675,7 @@ int fs_defragment(){
     char name_buf[MAX_FILENAME_LEN];
     int filesize, fileoffset;
 
-    int new_offset = METADATA_SIZE; // İlk boş blok buradan başlar
+    int new_offset = METADATA_SIZE; 
 
     for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
         off_t record_pos = i * RECORD_SIZE;
@@ -678,7 +685,7 @@ int fs_defragment(){
         read(disk_fd, &fileoffset, sizeof(int));
 
         if (name_buf[0] != '\0' && filesize > 0) {
-            // Dosyayı oku
+            // Dosya okunur
             char *buffer = malloc(filesize);
             lseek(disk_fd, fileoffset, SEEK_SET);
             read(disk_fd, buffer, filesize);
@@ -688,16 +695,15 @@ int fs_defragment(){
              return -1;
              }
 
-            // Yeni konuma yaz
+            // Yeni konuma yazılır
             lseek(disk_fd, new_offset, SEEK_SET);
             write(disk_fd, buffer, filesize);
             free(buffer);
 
-            // Metadata'daki offset’i güncelle
             lseek(disk_fd, record_pos + MAX_FILENAME_LEN + sizeof(int), SEEK_SET);
             write(disk_fd, &new_offset, sizeof(int));
 
-            // Yeni offset’i ayarla
+            // Yeni offset ayarlanır
             new_offset += filesize;
         }
     }
@@ -714,7 +720,7 @@ int fs_check_integrity() {
     int filesize, fileoffset;
     int is_valid = 1;
 
-    // Disk boyutunu al
+    // Disk boyutu alınır
     struct stat st;
     if (fstat(disk_fd, &st) == -1) {
         perror("fs_check_integrity: Disk boyutu alınamadı");
@@ -723,7 +729,7 @@ int fs_check_integrity() {
 
     off_t disk_size = st.st_size;
 
-    // Dosya başlangıç ve bitiş adreslerini ayrı dizilerde tut
+    
     int starts[MAX_FILE_COUNT];
     int ends[MAX_FILE_COUNT];
     char names[MAX_FILE_COUNT][MAX_FILENAME_LEN];
@@ -740,13 +746,13 @@ int fs_check_integrity() {
             int start = fileoffset;
             int end = fileoffset + filesize;
 
-            // Disk boyutunu aşma kontrolü
+           
             if (end > disk_size) {
                 printf("HATA: %s dosyasının konumu disk boyutunu aşıyor.\n", name_buf);
                 is_valid = 0;
             }
 
-            // Diğer dosyalarla çakışma kontrolü
+           
             for (int j = 0; j < file_count; j++) {
                 if (!(end <= starts[j] || start >= ends[j])) {
                     printf("HATA: %s dosyası %s ile çakışıyor.\n", name_buf, names[j]);
@@ -754,7 +760,7 @@ int fs_check_integrity() {
                 }
             }
 
-            // Geçerli dosyayı diziye ekle
+            
             starts[file_count] = start;
             ends[file_count] = end;
             strncpy(names[file_count], name_buf, MAX_FILENAME_LEN);
@@ -779,7 +785,7 @@ int fs_backup(const char *backup_path) {
         return -1;
     }
 
-    // Disk boyutunu al
+   
     struct stat st;
     if (fstat(disk_fd, &st) == -1) {
         perror("fs_backup: fstat hatası");
@@ -839,10 +845,10 @@ int fs_cat(const char*filename){
 }
 int fs_restore(const char *backup_path) {
     if (disk_fd != -1) {
-        close(disk_fd); // Açık diski kapat
+        close(disk_fd); 
     }
 
-    // Yedeği orijinal disk dosyasına geri yaz
+    // Yedeği orijinal disk dosyasına geri yazılır
     FILE *backup_file = fopen(backup_path, "rb");
     FILE *disk_file = fopen("disk.sim", "wb");
 
@@ -863,7 +869,7 @@ int fs_restore(const char *backup_path) {
     fclose(backup_file);
     fclose(disk_file);
 
-    // Yeniden aç
+   
     disk_fd = open("disk.sim", O_RDWR);
     if (disk_fd == -1) {
         perror("fs_restore: disk.sim yeniden açılamadı");
@@ -882,7 +888,7 @@ int fs_diff(const char *file1, const char *file2) {
     int filesize1 = -1, offset1 = -1;
     int filesize2 = -1, offset2 = -1;
 
-    // 1. ve 2. dosyaların metadata'sını bul
+    // 1. ve 2. dosyaların metadata'sı bulunur
     for (int i = 0; i < MAX_FILE_COUNT; i++) {
         read(disk_fd, name_buf, MAX_FILENAME_LEN);
         int filesize, offset;
@@ -909,7 +915,7 @@ int fs_diff(const char *file1, const char *file2) {
         return 1;
     }
 
-    // Bellek ayırma
+    
     char *buf1 = malloc(filesize1);
     char *buf2 = malloc(filesize2);
 
@@ -919,7 +925,7 @@ int fs_diff(const char *file1, const char *file2) {
         return -1;
     }
 
-    // Dosya içeriklerini okuma
+    // Dosya içerikleri okunur
     lseek(disk_fd, offset1, SEEK_SET);
     if (read(disk_fd, buf1, filesize1) != filesize1) {
         printf("fs_diff: %s dosyası okunamadı.\n", file1);
@@ -934,7 +940,7 @@ int fs_diff(const char *file1, const char *file2) {
         return -1;
     }
 
-    // Karşılaştırma
+   
     int result = memcmp(buf1, buf2, filesize1);
     free(buf1);
     free(buf2);
@@ -949,115 +955,4 @@ int fs_diff(const char *file1, const char *file2) {
 }
 
 
-void fs_log(const char *operation, const char *filename, const char *result) {
-    FILE *log_file = fopen("fs_log.txt", "a");
-    if (!log_file) {
-        perror("fs_log: Log dosyası açılamadı");
-        return;
-    }
 
-    time_t now = time(NULL);
-    char *timestamp = ctime(&now);
-    timestamp[strcspn(timestamp, "\n")] = 0; // new line kaldır
-
-    fprintf(log_file, "[%s] %s - %s: %s\n", timestamp, operation, filename, result);
-    fclose(log_file);
-}
-int fs_copy(char *source, char *dest) {
-    if (check_disk() == -1) return -1;
-    if (strlen(dest) >= MAX_FILENAME_LEN) {
-        printf("fs_copy: Hedef dosya adı çok uzun.\n");
-        return -1;
-    }
-
-    char name_buf[MAX_FILENAME_LEN];
-    int filesize, fileoffset;
-    int source_size = 0, source_offset = 0;
-    int found = 0;
-
-    // 1. Kaynak dosyayı bul
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
-        int metadata_offset = i * RECORD_SIZE;
-        lseek(disk_fd, metadata_offset, SEEK_SET);
-
-        read(disk_fd, name_buf, MAX_FILENAME_LEN);
-        read(disk_fd, &filesize, sizeof(int));
-        read(disk_fd, &fileoffset, sizeof(int));
-
-        if (strcmp(name_buf, source) == 0) {
-            source_size = filesize;
-            source_offset = fileoffset;
-            found = 1;
-            break;
-        }
-    }
-
-    if (!found) {
-        printf("fs_copy: Kaynak dosya bulunamadı: %s\n", source);
-        return -1;
-    }
-
-    // 2. Kaynak veriyi oku
-    char *buffer = malloc(source_size);
-    if (!buffer) {
-        printf("fs_copy: Bellek hatası.\n");
-        return -1;
-    }
-    lseek(disk_fd, source_offset, SEEK_SET);
-    read(disk_fd, buffer, source_size);
-
-    // 3. Hedef dosya zaten var mı kontrol et
-    found = 0;
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
-        int metadata_offset = i * RECORD_SIZE;
-        lseek(disk_fd, metadata_offset, SEEK_SET);
-        read(disk_fd, name_buf, MAX_FILENAME_LEN);
-        read(disk_fd, &filesize, sizeof(int));
-        read(disk_fd, &fileoffset, sizeof(int));
-
-        if (strncmp(name_buf, dest, MAX_FILENAME_LEN) == 0) {
-            // İçeriği üzerine yaz
-            lseek(disk_fd, fileoffset, SEEK_SET);
-            write(disk_fd, buffer, source_size);
-
-            // Dosya boyutunu güncelle
-            lseek(disk_fd, metadata_offset + MAX_FILENAME_LEN, SEEK_SET);
-            write(disk_fd, &source_size, sizeof(int));
-
-            printf("fs_copy: Var olan dosya '%s' üzerine yazıldı (%d byte)\n", dest, source_size);
-            free(buffer);
-            return 0;
-        }
-    }
-
-    // 4. Yeni dosya olarak ekle
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
-        int metadata_offset = i * RECORD_SIZE;
-        lseek(disk_fd, metadata_offset, SEEK_SET);
-        read(disk_fd, name_buf, MAX_FILENAME_LEN);
-
-        if (name_buf[0] == '\0') {
-            int new_offset = METADATA_SIZE + (i * 4096); // her dosya için ayrı bölge
-
-            // Metadata yaz
-            lseek(disk_fd, metadata_offset, SEEK_SET);
-            char dest_name[MAX_FILENAME_LEN] = {0};
-            strncpy(dest_name, dest, MAX_FILENAME_LEN - 1);
-            write(disk_fd, dest_name, MAX_FILENAME_LEN);
-            write(disk_fd, &source_size, sizeof(int));
-            write(disk_fd, &new_offset, sizeof(int));
-
-            // İçeriği yaz
-            lseek(disk_fd, new_offset, SEEK_SET);
-            write(disk_fd, buffer, source_size);
-
-            printf("fs_copy: %s -> %s kopyalandı (%d byte)\n", source, dest, source_size);
-            free(buffer);
-            return 0;
-        }
-    }
-
-    printf("fs_copy: Yeni dosya için yer kalmadı.\n");
-    free(buffer);
-    return -1;
-}
