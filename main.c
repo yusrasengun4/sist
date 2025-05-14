@@ -149,7 +149,7 @@ int main() {
                 scanf("%s", dosya_adi);
                 printf("Yeni dosya adı: ");
                 scanf("%s", dosya_adi2);
-                getchar(); // stdin temizliği (iyi)
+                getchar(); 
 
                if (fs_mv(dosya_adi, dosya_adi2) == 0) {
                printf("Dosya başarıyla yeniden adlandırıldı.\n");
