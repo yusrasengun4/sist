@@ -103,7 +103,7 @@ int fs_create(char *filename) {
     // Eğer dosya yoksa, boş yer arayıp kaydet
     lseek(disk_fd, 0, SEEK_SET); // Baştan tekrar başla
 
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+    for (int i = 0; i < MAX_FILE_COUNT; i++) {
         read(disk_fd, name_buf, MAX_FILENAME_LEN);
         read(disk_fd, &filesize, sizeof(int));
         read(disk_fd, &fileoffset, sizeof(int));
@@ -135,7 +135,7 @@ int fs_delete(char *filename) {
     int filesize;
     int fileoffset;
 
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+    for (int i = 0; i <MAX_FILE_COUNT; i++) {
         read(disk_fd, name_buf, MAX_FILENAME_LEN);
         read(disk_fd, &filesize, sizeof(int));
         read(disk_fd, &fileoffset, sizeof(int));
@@ -166,7 +166,7 @@ int fs_write(char *filename, char *data) {
     int filesize;
     int fileoffset;
 
-    for (int i = 0; i < METADATA_SIZE / RECORD_SIZE; i++) {
+    for (int i = 0; i < MAX_FILE_COUNT; i++) {
         read(disk_fd, name_buf, MAX_FILENAME_LEN);
         read(disk_fd, &filesize, sizeof(int));
         read(disk_fd, &fileoffset, sizeof(int));
